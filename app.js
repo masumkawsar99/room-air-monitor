@@ -388,7 +388,7 @@
     const last = rr[rr.length - 1], col = LV_COL[levelOfIndex(last.index)];
     let s = '';
     for (let i = 0; i < 3; i++) { const yv = Y(TH[i]); if (yv > 0 && yv < H) s += `<line x1="0" x2="${W}" y1="${yv.toFixed(1)}" y2="${yv.toFixed(1)}" stroke="${LV_COL[i + 1]}" stroke-width="1" stroke-dasharray="3 4" opacity=".7" vector-effect="non-scaling-stroke"/>`; }
-    s += `<path d="${d} L${X(last.t).toFixed(1)} ${H} L0 ${H}Z" fill="${col}" opacity=".12"/>`;
+    s += `<path d="${d} L${X(last.t).toFixed(1)} ${H} L${X(rr[0].t).toFixed(1)} ${H}Z" fill="${col}" opacity=".12"/>`;
     s += `<path d="${d}" fill="none" stroke="${css('--ink')}" stroke-width="1.8" vector-effect="non-scaling-stroke"/>`;
     s += `<line x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="0" y2="${H}" stroke="${css('--rule')}" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
     if (L && L.fi !== null) {
@@ -778,7 +778,7 @@
     setInterval(renderAgo, 1000);
     setInterval(load7, 15 * MIN);
     setInterval(loadOutdoor, 15 * MIN);
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
   }
   start();
 })();
