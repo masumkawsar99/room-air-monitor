@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so it opens fast and works offline.
 // Live data (Apps Script) and weather are always fetched from the network, never cached here.
-const CACHE = 'aq-shell-v3';
+const CACHE = 'aq-shell-v4';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './config.js', './manifest.json', './icons/icon-192.png', './icons/icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });

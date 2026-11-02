@@ -222,14 +222,38 @@
     if (S.tab === 'analysis') renderAnalysis();
     if (S.tab === 'charts' && S.range === 168) renderCharts(true);
   }
-  async function loadOutdoor() {
-    try {
-      const u = `https://api.open-meteo.com/v1/forecast?latitude=${CFG.LAT}&longitude=${CFG.LON}&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,wind_speed_10m&timezone=Asia%2FDhaka`;
-      const r = await fetch(u); if (!r.ok) throw new Error('HTTP ' + r.status);
-      const j = await r.json(); S.outdoor = j.current; S.outdoorErr = false;
-    } catch (e) { S.outdoorErr = true; console.warn('outdoor failed', e); }
+  let outdoorTimer = null;
+  async function loadOutdoor(attempt = 0) {
+    clearTimeout(outdoorTimer);
+    const base = `latitude=${CFG.LAT}&longitude=${CFG.LON}&timezone=Asia%2FDhaka`;
+    const urls = [
+      `https://api.open-meteo.com/v1/forecast?${base}&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,wind_speed_10m`,
+      `https://api.open-meteo.com/v1/forecast?${base}&current_weather=true&hourly=relative_humidity_2m,dew_point_2m,precipitation&forecast_days=1`
+    ];
+    let ok = false;
+    for (const u of urls) {
+      try {
+        const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 10000);
+        const r = await fetch(u, { cache: 'no-store', signal: ctl.signal }); clearTimeout(to);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        if (j.current && j.current.temperature_2m != null) { S.outdoor = j.current; }
+        else if (j.current_weather) {
+          const h = j.hourly || {}, times = h.time || [], now = Date.now();
+          let k = 0; times.forEach((t, i) => { if (new Date(t + ':00+06:00').getTime() <= now) k = i; });
+          S.outdoor = { temperature_2m: j.current_weather.temperature, wind_speed_10m: j.current_weather.windspeed,
+            relative_humidity_2m: (h.relative_humidity_2m || [])[k], dew_point_2m: (h.dew_point_2m || [])[k], precipitation: (h.precipitation || [])[k] };
+        } else throw new Error('unexpected response');
+        ok = true; break;
+      } catch (e) { console.warn('outdoor weather failed', u, e); }
+    }
+    S.outdoorErr = !ok;
     renderHealth(); renderAdvice();
+    // refresh every 15 min; after a failure retry sooner (30 s, 1 min, 2 min … up to 15 min)
+    const wait = ok ? 15 * 60000 : Math.min(15 * 60000, 30000 * Math.pow(2, attempt));
+    outdoorTimer = setTimeout(() => loadOutdoor(ok ? 0 : attempt + 1), wait);
   }
+  window.addEventListener('online', () => loadOutdoor());
 
   // ------------------------------------------------------------ analysis helpers
   const latest = () => (S.rows.length ? S.rows[S.rows.length - 1] : null);
