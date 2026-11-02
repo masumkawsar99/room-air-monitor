@@ -122,7 +122,7 @@
   const dewIdx = d => (d < 16 ? 0 : d < 21 ? 1 : d < 24 ? 2 : 3);
 
   // ------------------------------------------------------------ state
-  const S = { rows: [], rows7: [], outdoor: null, outdoorErr: false, range: 24, charts: {}, tab: 'live', loaded: false, error: false };
+  const S = { rows: [], rows7: [], outdoor: null, outdoorErr: false, range: 24, charts: {}, tab: 'overview', loaded: false, error: false };
 
   // ------------------------------------------------------------ DEMO data
   const Demo = (() => {
@@ -219,8 +219,7 @@
   async function load7() {
     try { const j = await api({ hours: 168, step: 10 }); S.rows7 = j.rows.map(normRow).sort((a, b) => a.t - b.t); saveCache(); }
     catch (e) { console.warn('load7 failed', e); }
-    if (S.tab === 'analysis') renderAnalysis();
-    if (S.tab === 'charts' && S.range === 168) renderCharts(true);
+    if (S.tab === 'trends') { renderAnalysis(); if (S.range === 168) renderCharts(true); }
   }
   let outdoorTimer = null;
   const wnum = x => (x === null || x === undefined || x === '' || !Number.isFinite(Number(x)) ? null : Number(x));
@@ -351,6 +350,53 @@
 
   function chipHTML(lv, text) { return `<span class="chip" style="--c:${lv === null || lv === undefined ? 'var(--lnone)' : LV_COL[lv]}">${text}</span>`; }
   function trendText(d, tol) { if (d === null) return ''; return d > tol ? `↑ ${T('rising')} ${T('over10')}` : d < -tol ? `↓ ${T('falling')} ${T('over10')}` : `→ ${T('steady')}`; }
+  function sparkPath(vals, w, h, pad, lo, hi) {
+    const pts = vals.map((v, i) => [vals.length < 2 ? w : (i / (vals.length - 1)) * w, v]).filter(p => p[1] !== null);
+    if (pts.length < 2) return null;
+    const mn = lo !== undefined ? lo : Math.min(...pts.map(p => p[1])), mx = hi !== undefined ? hi : Math.max(...pts.map(p => p[1]));
+    const span = mx - mn || 1, Y = v => (h - pad) - ((v - mn) / span) * (h - 2 * pad);
+    return pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('');
+  }
+  function drawSpark(id, vals, color) {
+    const el = $(id); if (!el) return;
+    const d = sparkPath(vals, 120, 32, 4);
+    el.innerHTML = d ? `<path d="${d} L120 32 L0 32Z" fill="${color}" opacity=".12"/><path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>` : '';
+  }
+  function bucket(rows, f, n) { // n evenly spaced averages
+    if (!rows.length) return [];
+    const t0 = rows[0].t, t1 = rows[rows.length - 1].t, step = (t1 - t0) / n || 1, out = new Array(n).fill(null).map(() => []);
+    rows.forEach(r => { const v = f(r); if (v === null || v === undefined || !isFinite(v)) return; out[Math.min(n - 1, Math.floor((r.t - t0) / step))].push(v); });
+    return out.map(a => (a.length ? mean(a) : null));
+  }
+  function renderSparks() {
+    const from = Date.now() - 6 * HOUR, r = S.rows.filter(x => x.t >= from);
+    const tc = css('--slate');
+    drawSpark('sparkTemp', bucket(r, x => x.temp, 60), '#e0584f');
+    drawSpark('sparkHum', bucket(r, x => x.hum, 60), '#3b82f6');
+    drawSpark('sparkFeels', bucket(r, x => (x.temp === null || x.hum === null ? null : feelsLike(x.temp, x.hum)), 60), '#e8732a');
+    drawSpark('sparkDew', bucket(r, x => (x.temp === null || x.hum === null ? null : dewPoint(x.temp, x.hum)), 60), '#14b8a6');
+    void tc;
+    // forecast card: last 2 h of index + the +10 min forecast point
+    const el = $('fcSpark'); if (!el) return;
+    const now = Date.now(), f0 = now - 2 * HOUR, f1 = now + 10 * MIN, W = 300, H = 90, pad = 8;
+    const rr = S.rows.filter(x => x.t >= f0 && x.index !== null), L = latest();
+    if (rr.length < 2) { el.innerHTML = ''; return; }
+    const vals = rr.map(x => x.index).concat(L && L.fi !== null ? [L.fi] : []);
+    const lo = Math.min(90, ...vals) - 2, hi = Math.max(TH[0] + 5, ...vals) + 2;
+    const X = t => ((t - f0) / (f1 - f0)) * W, Y = v => (H - pad) - ((v - lo) / (hi - lo)) * (H - 2 * pad);
+    let d = rr.map((x, i) => `${i ? 'L' : 'M'}${X(x.t).toFixed(1)} ${Y(x.index).toFixed(1)}`).join('');
+    const last = rr[rr.length - 1], col = LV_COL[levelOfIndex(last.index)];
+    let s = '';
+    for (let i = 0; i < 3; i++) { const yv = Y(TH[i]); if (yv > 0 && yv < H) s += `<line x1="0" x2="${W}" y1="${yv.toFixed(1)}" y2="${yv.toFixed(1)}" stroke="${LV_COL[i + 1]}" stroke-width="1" stroke-dasharray="3 4" opacity=".7" vector-effect="non-scaling-stroke"/>`; }
+    s += `<path d="${d} L${X(last.t).toFixed(1)} ${H} L0 ${H}Z" fill="${col}" opacity=".12"/>`;
+    s += `<path d="${d}" fill="none" stroke="${css('--ink')}" stroke-width="1.8" vector-effect="non-scaling-stroke"/>`;
+    s += `<line x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="0" y2="${H}" stroke="${css('--rule')}" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+    if (L && L.fi !== null) {
+      s += `<path d="M${X(last.t).toFixed(1)} ${Y(last.index).toFixed(1)} L${X(f1 - 2 * MIN).toFixed(1)} ${Y(L.fi).toFixed(1)}" fill="none" stroke="${css('--fc')}" stroke-width="2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>`;
+      s += `<circle cx="${X(f1 - 2 * MIN).toFixed(1)}" cy="${Y(L.fi).toFixed(1)}" r="4" fill="${css('--fc')}"/>`;
+    }
+    el.innerHTML = s;
+  }
   function renderLive() {
     const L = latest(), V = latestValid();
     const word = $('airWord');
@@ -381,6 +427,7 @@
     $('feelsVal').textContent = fmt(fl2, 1); $('dewVal').textContent = fmt(dp, 1);
     $('comfortSmall').textContent = fl2 === null ? '' : T('comfortL')[comfortIdx(fl2)];
     $('dewSmall').textContent = dp === null ? '' : T('dewL')[dewIdx(dp)];
+    renderSparks();
     renderAgo();
   }
 
@@ -434,7 +481,10 @@
     const st = dayStats(S.rows, d0, now + MIN);
     const sc = roomScore(st);
     $('roomScore').textContent = sc === null ? '' : fill(T('roomScoreHead'), { s: sc, l: scoreLabel(sc) });
-    $('scoreBig').textContent = sc === null ? '—' : `${sc} / 100 · ${scoreLabel(sc)}`;
+    $('scoreBig').textContent = sc === null ? '—' : `${sc} · ${scoreLabel(sc)}`;
+    const ring = $('scoreRing');
+    if (ring) { const R = 50, C = 2 * Math.PI * R, f = sc === null ? 0 : sc / 100, col = sc === null ? css('--lnone') : sc >= 85 ? LV_COL[0] : sc >= 70 ? '#7cb342' : sc >= 50 ? LV_COL[1] : LV_COL[3];
+      ring.innerHTML = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${css('--soft2')}" stroke-width="12"/><circle cx="60" cy="60" r="${R}" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(C * f).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/><text x="60" y="68" text-anchor="middle" font-family="Bricolage Grotesque, system-ui, sans-serif" font-weight="800" font-size="28" fill="${css('--ink')}">${sc === null ? '—' : sc}</text>`; }
     // ribbon: 288 five-minute bins, coloured by the worst level in each bin
     const bins = new Array(288).fill(null);
     S.rows.forEach(r => { if (r.t < d0 || r.lv === null) return; const k = Math.floor((r.t - d0) / (5 * MIN)); if (k >= 0 && k < 288) bins[k] = bins[k] === null ? r.lv : Math.max(bins[k], r.lv); });
@@ -445,7 +495,7 @@
     let nl = $('ribbonWrap').querySelector('.now-line'); if (!nl) { nl = document.createElement('div'); nl.className = 'now-line'; $('ribbonWrap').appendChild(nl); }
     nl.style.left = `calc(${pos(now)} - 1px)`;
     $('summaryStats').innerHTML = !st ? `<span class="empty">${T('noData')}</span>` :
-      T('lv').map((n, i) => `<span><span class="sw" style="background:${LV_COL[i]}"></span><b>${fmt(st.pct[i], 0)}%</b>${n}</span>`).join('') +
+      T('lv').map((n, i) => `<span><b><span class="sw" style="background:${LV_COL[i]}"></span>${fmt(st.pct[i], 0)}%</b>${n}</span>`).join('') +
       `<span><b>${st.events.length}</b>${T('sprays').toLowerCase()}</span>` +
       `<span><b>${fmt(st.peak.index, 0)}</b>${T('peak').toLowerCase()} (${hhmm(st.peak.t)})</span>` +
       (st.best ? `<span><b>${String(st.best[0]).padStart(2, '0')}:00</b>${T('bestHour').toLowerCase()}</span><span><b>${String(st.worst[0]).padStart(2, '0')}:00</b>${T('worstHour').toLowerCase()}</span>` : '');
@@ -499,13 +549,30 @@
     if (S.range > 48) return S.rows7.length ? S.rows7 : S.rows;
     const from = Date.now() - S.range * HOUR; return S.rows.filter(r => r.t >= from);
   }
+  function renderRangeStats(rows) {
+    const el = $('rangeStats'); if (!el) return;
+    const v = rows.filter(r => r.index !== null);
+    if (!v.length) { el.innerHTML = `<div><div class="k">${T('noData')}</div></div>`; return; }
+    const pk = v.reduce((a, b) => (b.index > a.index ? b : a)), avg = mean(v.map(r => r.index));
+    const nrm = 100 * v.filter(r => levelOfIndex(r.index) === 0).length / v.length;
+    const pairs = rows.filter(r => r.fi !== null && r.index !== null);
+    let mae = null; if (pairs.length > 20) { const byT = new Map(rows.map(r => [Math.round(r.t / 30000), r.index])); const e = [];
+      pairs.forEach(r => { for (let k = 19; k <= 21; k++) { const a = byT.get(Math.round(r.t / 30000) + k); if (a !== undefined && a !== null) { e.push(Math.abs(a - r.fi)); break; } } });
+      if (e.length > 20) mae = mean(e); }
+    const lab = T('range')[S.range];
+    el.innerHTML = `<div><div class="k">Average index</div><div class="v">${fmt(avg, 0)}</div><div class="s">last ${lab}</div></div>` +
+      `<div><div class="k">Peak index</div><div class="v">${fmt(pk.index, 0)}</div><div class="s">${S.range > 24 ? dayLabel(pk.t) + ' ' : ''}${hhmm(pk.t)}</div></div>` +
+      `<div><div class="k">Time in Normal</div><div class="v">${fmt(nrm, 0)}%</div><div class="s">of readings</div></div>` +
+      `<div><div class="k">Forecast error</div><div class="v">${mae === null ? '—' : '±' + fmt(mae, 1)}</div><div class="s">${mae === null ? 'not enough forecasts yet' : 'mean absolute, index points'}</div></div>`;
+  }
   function renderCharts(rebuild) {
+    renderRangeStats(rangeRows());
     if (!window.Chart) return;
     const rows = rangeRows(), o = baseOpts(S.range);
     const idx = rows.filter(r => r.index !== null).map(r => ({ x: r.t, y: r.index }));
     const fc = rows.filter(r => r.fi !== null).map(r => ({ x: r.t + 10 * MIN, y: r.fi }));
     const ds1 = [{ label: T('actual'), data: idx, borderColor: css('--ink'), backgroundColor: 'transparent' },
-                 { label: T('forecast10'), data: fc, borderColor: '#7c5cff', borderDash: [5, 4], borderWidth: 1.4, backgroundColor: 'transparent' }];
+                 { label: T('forecast10'), data: fc, borderColor: css('--fc'), borderDash: [5, 4], borderWidth: 1.6, backgroundColor: 'transparent' }];
     const temp = rows.filter(r => r.temp !== null).map(r => ({ x: r.t, y: r.temp })), hum = rows.filter(r => r.hum !== null).map(r => ({ x: r.t, y: r.hum }));
     const ds2 = [{ label: T('temperature') + ' (°C)', data: temp, borderColor: '#ef4444', yAxisID: 'y' }, { label: T('humidity') + ' (%)', data: hum, borderColor: '#3b82f6', yAxisID: 'y1' }];
     const gas = rows.filter(r => r.gas !== null).map(r => ({ x: r.t, y: r.gas })), rs = rows.filter(r => r.rs !== null).map(r => ({ x: r.t, y: r.rs })), ra = rows.filter(r => r.ratio !== null).map(r => ({ x: r.t, y: r.ratio }));
@@ -522,7 +589,7 @@
         ch.options.scales.x.min = xmin; ch.options.scales.x.max = xmax; ch.update('none');
       }
     };
-    mk('idx', 'indexChart', ds1, { y: { grid: { color: grid }, ticks: { color: tick }, suggestedMin: 85, suggestedMax: 150 } }, { bands: true });
+    mk('idx', 'indexChart', ds1, { y: { grid: { color: grid }, ticks: { color: tick }, suggestedMin: 85, suggestedMax: 150 } }, { bands: true, legend: { display: false } });
     mk('th', 'thChart', ds2, { y: { position: 'left', grid: { color: grid }, ticks: { color: tick } }, y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: tick } } });
     if (!$('rawBox').hidden) mk('raw', 'rawChart', ds3, { y: { position: 'left', grid: { color: grid }, ticks: { color: tick } }, y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: tick } }, y2: { display: false } });
   }
@@ -548,6 +615,7 @@
     const m = moldInfo();
     $('moldLabel').textContent = m.n ? T('moldL')[m.level] : '—';
     $('moldDetail').textContent = m.n ? fill(T('moldDetail'), { a: fmt(m.a, 1), b: fmt(m.b, 1) }) : '';
+    if ($('moldMeter')) $('moldMeter').dataset.l = m.n ? String(m.level) : '';
     // night report
     const [ns, ne] = nightWindow(), st = dayStats(S.rows, ns, ne);
     if (!st || st.n < 60) $('nightReport').innerHTML = `<div class="empty">${T('nightNoData')}</div>`;
@@ -617,7 +685,7 @@
     const wkP = Object.keys(wkB).map(Number).sort((a, c) => a - c).map(k => ({ x: k * 15 * MIN, y: mean(wkB[k]) }));
     const ds = [{ label: T('today'), data: prof(S.rows, today0, now + MIN), borderColor: css('--ink'), borderWidth: 2 },
       { label: T('yesterday'), data: prof(S.rows, today0 - DAY, today0), borderColor: '#94a3b8', borderWidth: 1.5 },
-      { label: T('week'), data: wkP, borderColor: '#7c5cff', borderDash: [5, 4], borderWidth: 1.5 }];
+      { label: T('week'), data: wkP, borderColor: css('--fc'), borderDash: [5, 4], borderWidth: 1.5 }];
     const grid = css('--rule'), tick = css('--slate');
     if (!window.Chart) return;
     if (S.charts.ov) S.charts.ov.destroy();
@@ -668,24 +736,22 @@
   function setTab(tab) {
     S.tab = tab;
     document.querySelectorAll('.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + tab));
-    document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    document.querySelectorAll('.tabbar button, .topnav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     try { sessionStorage.setItem('aq_tab', tab); } catch { /* ignore */ }
-    if (tab === 'charts') renderCharts(true);
-    if (tab === 'health') renderHealth();
-    if (tab === 'analysis') renderAnalysis();
+    if (tab === 'trends') { renderCharts(true); renderAnalysis(); }
+    if (tab === 'overview') renderHealth();
     if (tab === 'info') renderInfo();
     window.scrollTo({ top: 0 });
   }
   function renderAll() {
     renderStatus(); renderLive(); renderBanner(); renderAdvice(); renderSummary(); checkNotifications();
-    if (S.tab === 'charts') renderCharts(false);
-    if (S.tab === 'health') renderHealth();
-    if (S.tab === 'analysis') renderAnalysis();
+    renderHealth();
+    if (S.tab === 'trends') { renderCharts(false); renderAnalysis(); }
   }
-  function rebuildAll() { Object.keys(S.charts).forEach(k => { if (S.charts[k]) S.charts[k].destroy(); delete S.charts[k]; }); renderAll(); if (S.tab === 'charts') renderCharts(true); if (S.tab === 'info') renderInfo(); }
+  function rebuildAll() { Object.keys(S.charts).forEach(k => { if (S.charts[k]) S.charts[k].destroy(); delete S.charts[k]; }); renderAll(); if (S.tab === 'trends') renderCharts(true); if (S.tab === 'info') renderInfo(); }
 
   function bind() {
-    document.querySelectorAll('.tabbar button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+    document.querySelectorAll('.tabbar button, .topnav button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
     document.querySelectorAll('#rangeSeg button').forEach(b => b.addEventListener('click', () => {
       S.range = +b.dataset.range; document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.toggle('on', x === b)); renderCharts(true);
     }));
@@ -704,7 +770,9 @@
     await loadMain();
     renderAll();
     let saved = null; try { saved = sessionStorage.getItem('aq_tab'); } catch { /* ignore */ }
-    if (saved && saved !== 'live') setTab(saved);
+    const map = { live: 'overview', health: 'overview', charts: 'trends', analysis: 'trends' };
+    if (saved) saved = map[saved] || saved;
+    if (saved && saved !== 'overview' && $('tab-' + saved)) setTab(saved);
     load7(); loadOutdoor();
     setInterval(poll, REFRESH);
     setInterval(renderAgo, 1000);

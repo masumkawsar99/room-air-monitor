@@ -63,13 +63,11 @@ It then opens like an app with its own icon.
 
 ## Features
 
-| Tab | What it shows |
+| Page | What it shows |
 |---|---|
-| **Live** | air level badge, Pollution Index gauge, 10-min TinyML forecast with trend, temperature & humidity with trends, feels-like and dew point, online/offline status, spray banner with recovery countdown, advice (ventilation, heat, mold), today's summary donut, room score, today's spray events |
-| **Charts** | Pollution Index with level bands + forecast vs actual, temperature & humidity, optional raw gas_adc / Rs / ratio; 1 h · 6 h · 24 h · 7 d |
-| **Health** | thermal comfort (NOAA heat index), dew point, mold/dampness risk, night air report (23:00–07:00), daily room score, indoor vs outdoor Dhaka weather (Open-Meteo) and "good time to open windows" |
-| **Analysis** | hour × day pollution heatmap (7 days), today vs yesterday vs 7-day average, Pollution Index by time of day |
-| **Info** | what the levels mean, why it is a relative index (not an AQI), how the forecast works, room-score formula, hardware |
+| **Overview** | air level with the Pollution Index orb, the 10-minute TinyML forecast with a 2-hour trend, temperature / humidity / feels-like / dew point with 6-hour sparklines, today's colour bar and stats, advice, room score, mold risk, thermal comfort, night air report, indoor vs outdoor weather, today's spray events |
+| **Trends** | range summary (average, peak, time in Normal, live forecast error), Pollution Index with level bands and forecast vs actual, temperature & humidity, index by time of day, 7-day hour × day heatmap, today vs yesterday vs 7-day average, optional raw gas_adc / Rs / ratio; 1 h · 6 h · 24 h · 7 d |
+| **About** | what the levels mean, why it is a relative index (not an AQI), how the forecast works, room-score formula, hardware, notifications |
 
 Also: dark / light / auto theme, browser notifications for spikes and "air is clear again", works offline with the last loaded data.
 
