@@ -223,29 +223,39 @@
     if (S.tab === 'charts' && S.range === 168) renderCharts(true);
   }
   let outdoorTimer = null;
+  const wnum = x => (x === null || x === undefined || x === '' || !Number.isFinite(Number(x)) ? null : Number(x));
+  // Three free, key-less weather services; the first one that answers is used.
+  const WEATHER = [
+    { name: 'Open-Meteo', link: 'https://open-meteo.com',
+      url: () => `https://api.open-meteo.com/v1/forecast?latitude=${CFG.LAT}&longitude=${CFG.LON}&timezone=auto&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,wind_speed_10m`,
+      parse: j => { const c = j.current || {}; return { t: wnum(c.temperature_2m), h: wnum(c.relative_humidity_2m), d: wnum(c.dew_point_2m), p: wnum(c.precipitation), w: wnum(c.wind_speed_10m) }; } },
+    { name: 'MET Norway', link: 'https://api.met.no',
+      url: () => `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${(+CFG.LAT).toFixed(2)}&lon=${(+CFG.LON).toFixed(2)}`,
+      parse: j => {
+        const ts = (j.properties && j.properties.timeseries) || [], now = Date.now();
+        let best = ts[0]; for (const x of ts) if (Math.abs(new Date(x.time) - now) < Math.abs(new Date(best.time) - now)) best = x;
+        const d = best.data.instant.details, n1 = best.data.next_1_hours;
+        return { t: wnum(d.air_temperature), h: wnum(d.relative_humidity), d: null, p: n1 ? wnum(n1.details.precipitation_amount) : 0, w: d.wind_speed != null ? d.wind_speed * 3.6 : null };
+      } },
+    { name: 'wttr.in', link: 'https://wttr.in',
+      url: () => `https://wttr.in/${CFG.LAT},${CFG.LON}?format=j1`,
+      parse: j => { const c = (j.current_condition || [])[0] || {}; return { t: wnum(c.temp_C), h: wnum(c.humidity), d: null, p: wnum(c.precipMM), w: wnum(c.windspeedKmph) }; } }
+  ];
   async function loadOutdoor(attempt = 0) {
     clearTimeout(outdoorTimer);
-    const base = `latitude=${CFG.LAT}&longitude=${CFG.LON}&timezone=Asia%2FDhaka`;
-    const urls = [
-      `https://api.open-meteo.com/v1/forecast?${base}&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,wind_speed_10m`,
-      `https://api.open-meteo.com/v1/forecast?${base}&current_weather=true&hourly=relative_humidity_2m,dew_point_2m,precipitation&forecast_days=1`
-    ];
     let ok = false;
-    for (const u of urls) {
+    for (const src of WEATHER) {
       try {
         const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 10000);
-        const r = await fetch(u, { cache: 'no-store', signal: ctl.signal }); clearTimeout(to);
+        const r = await fetch(src.url(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(to);
         if (!r.ok) throw new Error('HTTP ' + r.status);
-        const j = await r.json();
-        if (j.current && j.current.temperature_2m != null) { S.outdoor = j.current; }
-        else if (j.current_weather) {
-          const h = j.hourly || {}, times = h.time || [], now = Date.now();
-          let k = 0; times.forEach((t, i) => { if (new Date(t + ':00+06:00').getTime() <= now) k = i; });
-          S.outdoor = { temperature_2m: j.current_weather.temperature, wind_speed_10m: j.current_weather.windspeed,
-            relative_humidity_2m: (h.relative_humidity_2m || [])[k], dew_point_2m: (h.dew_point_2m || [])[k], precipitation: (h.precipitation || [])[k] };
-        } else throw new Error('unexpected response');
+        const o = src.parse(await r.json());
+        if (o.t === null || o.h === null) throw new Error('missing values');
+        if (o.d === null) o.d = dewPoint(o.t, o.h);
+        S.outdoor = { temperature_2m: o.t, relative_humidity_2m: o.h, dew_point_2m: o.d, precipitation: o.p || 0, wind_speed_10m: o.w };
+        const a = document.querySelector('#weatherLink'); if (a) { a.textContent = src.name; a.href = src.link; }
         ok = true; break;
-      } catch (e) { console.warn('outdoor weather failed', u, e); }
+      } catch (e) { console.warn('outdoor weather failed:', src.name, e); }
     }
     S.outdoorErr = !ok;
     renderHealth(); renderAdvice();
