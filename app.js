@@ -27,15 +27,15 @@
       temperature: 'Temperature', humidity: 'Humidity', feelsLike: 'Feels like', dewPoint: 'Dew point', heatIndex: 'heat index',
       advice: 'What to do', todaySummary: 'Today', eventLog: 'Sprays and pollution events today',
       lead: ['Usual for this room.', 'A little above usual. Fine for now.', 'Clearly above usual. Something is releasing gas.', 'Sudden strong rise, usually a spray.'],
-      leadIdx: 'Index <b>{i}</b>, where 100 is this room\'s usual level. Not an official AQI.',
+      leadIdx: 'Air level <b>{i}</b>, where 100 is this room\'s usual air. Not an official AQI.',
       now: 'Now', next10: 'In 10 min', fcWhy: 'Forecast by the TinyML model running on the ESP32.', over10: 'over 10 min',
-      roomScoreHead: 'Room score {s} ({l})', indexWord: 'index', noForecastShort: 'forecast starts ~2 h after power-on',
-      indexChart: 'Pollution Index · forecast vs actual', actual: 'Actual', forecastShifted: 'Forecast (plotted at the time it predicts)',
+      roomScoreHead: 'Room score {s} ({l})', indexWord: 'air level', noForecastShort: 'forecast starts ~2 h after power-on',
+      indexChart: 'Air level · forecast vs actual', actual: 'Actual', forecastShifted: 'Forecast (plotted at the time it predicts)',
       thChart: 'Temperature & humidity', showRaw: 'Show raw sensor data (gas_adc, Rs, ratio)',
       comfort: 'Thermal comfort', moldRisk: 'Mold / dampness risk', roomScore: 'Daily room score', scoreNote: 'Heuristic score (see Info).',
       nightReport: 'Night air report (23:00–07:00)', outdoor: 'Indoor vs outdoor (Dhaka)', weatherSrc: 'Outdoor weather:',
       heatmap: 'When does pollution happen? (last 7 days, hourly average)', compare: 'Today vs yesterday vs 7-day average',
-      overlay: 'Pollution Index by time of day', notifications: 'Notifications',
+      overlay: 'Air level by time of day', notifications: 'Notifications',
       notifNote: 'Get a browser notification when a spray/spike starts and when the air is clear again (while the app is open).',
       enableNotif: 'Enable notifications', notifOn: 'Notifications are on', notifBlocked: 'Notifications are blocked in this browser',
       tabLive: 'Live', tabCharts: 'Charts', tabHealth: 'Health', tabAnalysis: 'Analysis', tabInfo: 'Info',
@@ -49,7 +49,7 @@
       recovering: 'Recovering after the spike at {t} (peak {p}) · back to Normal in ~{m} min',
       recoveringSoon: 'Recovering after the spike at {t} (peak {p}) · back to Normal within ~10 min',
       clearTitle: 'Air is clear again', clearBody: 'Back to Normal after the spike at {t}.',
-      spikeTitle: 'Spray / pollution spike', spikeBody: 'Pollution Index {p} at {t}.',
+      spikeTitle: 'Spray / pollution spike', spikeBody: 'Air level {p} at {t}.',
       advNormal: 'Air is normal — no action needed.',
       advElevated: 'Air has been elevated for {m} min — open a window or switch on a fan.',
       advSlow: 'Still above normal {m} min after the spray — ventilate the room.',
@@ -58,8 +58,8 @@
       advOutHumid: 'Outdoor air is more humid — ventilate briefly.',
       advHot: 'Very hot & humid indoors (feels like {f}°C) — use a fan and drink water.',
       advMold: 'Humidity has stayed high for many hours — ventilate or dehumidify to prevent mold.',
-      sprays: 'Spray events', peak: 'Peak index', avgTemp: 'Avg temperature', avgHum: 'Avg humidity',
-      bestHour: 'Best hour', worstHour: 'Worst hour', normalPct: '% Normal', avgIndex: 'Avg index',
+      sprays: 'Spray events', peak: 'Peak air level', avgTemp: 'Avg temperature', avgHum: 'Avg humidity',
+      bestHour: 'Best hour', worstHour: 'Worst hour', normalPct: '% Normal', avgIndex: 'Avg air level',
       noEvents: 'No spray or pollution events today 🎉', recov: 'back to Normal in', ongoing: 'ongoing',
       score: 'Score', excellent: 'Excellent', good: 'Good', fair: 'Fair', poor: 'Poor',
       comfortL: ['Comfortable', 'Warm', 'Hot', 'Very hot & humid', 'Dangerous heat'],
@@ -560,10 +560,10 @@
       pairs.forEach(r => { for (let k = 19; k <= 21; k++) { const a = byT.get(Math.round(r.t / 30000) + k); if (a !== undefined && a !== null) { e.push(Math.abs(a - r.fi)); break; } } });
       if (e.length > 20) mae = mean(e); }
     const lab = T('range')[S.range];
-    el.innerHTML = `<div><div class="k">Average index</div><div class="v">${fmt(avg, 0)}</div><div class="s">last ${lab}</div></div>` +
-      `<div><div class="k">Peak index</div><div class="v">${fmt(pk.index, 0)}</div><div class="s">${S.range > 24 ? dayLabel(pk.t) + ' ' : ''}${hhmm(pk.t)}</div></div>` +
+    el.innerHTML = `<div><div class="k">Average air level</div><div class="v">${fmt(avg, 0)}</div><div class="s">last ${lab}</div></div>` +
+      `<div><div class="k">Peak air level</div><div class="v">${fmt(pk.index, 0)}</div><div class="s">${S.range > 24 ? dayLabel(pk.t) + ' ' : ''}${hhmm(pk.t)}</div></div>` +
       `<div><div class="k">Time in Normal</div><div class="v">${fmt(nrm, 0)}%</div><div class="s">of readings</div></div>` +
-      `<div><div class="k">Forecast error</div><div class="v">${mae === null ? '—' : '±' + fmt(mae, 1)}</div><div class="s">${mae === null ? 'not enough forecasts yet' : 'mean absolute, index points'}</div></div>`;
+      `<div><div class="k">Forecast error</div><div class="v">${mae === null ? '—' : '±' + fmt(mae, 1)}</div><div class="s">${mae === null ? 'not enough forecasts yet' : 'average miss, in air-level points'}</div></div>`;
   }
   function renderCharts(rebuild) {
     renderRangeStats(rangeRows());
@@ -702,15 +702,15 @@
     const r = n => n.toFixed(1);
     const en = `
 <h3>What the levels mean</h3>
-<table><tr><th>Level</th><th>Pollution Index</th><th>Typical cause</th></tr>
+<table><tr><th>Level</th><th>Air level</th><th>Typical cause</th></tr>
 <tr><td><span class="sw" style="background:${LV_COL[0]}"></span>Normal</td><td>≤ ${r(TH[0])}</td><td>usual room air</td></tr>
 <tr><td><span class="sw" style="background:${LV_COL[1]}"></span>Slightly Elevated</td><td>${r(TH[0])} – ${r(TH[1])}</td><td>small rise in gases/VOCs (people, closed windows)</td></tr>
 <tr><td><span class="sw" style="background:${LV_COL[2]}"></span>Elevated</td><td>${r(TH[1])} – ${r(TH[2])}</td><td>clear pollution event (cooking, incense, spray)</td></tr>
 <tr><td><span class="sw" style="background:${LV_COL[3]}"></span>Spike</td><td>&gt; ${r(TH[2])}</td><td>sudden strong rise — in this room usually an air-freshener spray</td></tr></table>
-<h3>A relative index, not an AQI</h3>
-<p>The MP-135 metal-oxide sensor reacts to many gases at once (alcohol, hydrogen, CO, VOCs) and cannot measure any single gas in ppm. The ESP32 therefore converts the raw signal into a resistance ratio, corrects it for humidity and temperature (DHT22), and compares it with the median of the previous 3 hours. <b>100 = this room's usual level</b>; 130 means 30 % above it. These levels are not health categories and this is not an official Air Quality Index. Dust (PM2.5) is not measured.</p>
+<h3>Air level: a relative number, not an AQI</h3>
+<p>The MP-135 metal-oxide sensor reacts to many gases at once (alcohol, hydrogen, CO, VOCs) and cannot measure any single gas in ppm. The ESP32 therefore converts the raw signal into a resistance ratio, corrects it for humidity and temperature (DHT22), and compares it with the median of the previous 3 hours. The result is the <b>air level</b>: <b>100 = this room's usual air</b>, 130 means 30 % above it. (In the research paper and dataset this is called the relative Pollution Index.) The four bands are not health categories and this is not an official Air Quality Index. Dust (PM2.5) is not measured.</p>
 <h3>How the forecast works</h3>
-<p>A small LightGBM model (60 trees, about 60 KB of C code) runs on the ESP32 itself and predicts how the index will change in the next 10 minutes (about 86 µs per prediction). On unseen test days it reduced forecast error by 13–16 % compared with assuming "no change". It forecasts recovery after a spray well, but cannot know in advance when someone will spray.</p>
+<p>A small LightGBM model (60 trees, about 60 KB of C code) runs on the ESP32 itself and predicts how the air level will change in the next 10 minutes (about 86 µs per prediction). On unseen test days it reduced forecast error by 13–16 % compared with assuming "no change". It forecasts recovery after a spray well, but cannot know in advance when someone will spray.</p>
 <h3>Daily room score</h3>
 <p>A simple heuristic: 100 − (0.2 × % Slightly Elevated + 0.6 × % Elevated + 1.0 × % Spike) − 3 × spray events − 0.1 × % time with feels-like temperature above 41 °C, limited to 0–100. 85+ Excellent · 70–84 Good · 50–69 Fair · below 50 Poor.</p>
 <h3>Comfort calculations</h3>

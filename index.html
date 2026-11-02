@@ -70,7 +70,7 @@
             <p id="airLead" class="air-lead"></p>
             <div id="updatedAgo" class="air-meta">—</div>
           </div>
-          <div class="orb"><svg id="orb" viewBox="0 0 200 200" role="img" aria-label="Pollution Index"></svg></div>
+          <div class="orb"><svg id="orb" viewBox="0 0 200 200" role="img" aria-label="Air level"></svg></div>
         </section>
 
         <section class="card forecast span-4">
@@ -147,7 +147,7 @@
     <!-- ======================= TRENDS (charts + analysis) ======================= -->
     <section id="tab-trends" class="tab">
       <div class="trends-head">
-        <div><h1 class="page-title">Trends</h1><p class="muted">Pollution Index, forecast accuracy and daily patterns.</p></div>
+        <div><h1 class="page-title">Trends</h1><p class="muted">Air level, forecast accuracy and daily patterns. 100 = usual for this room.</p></div>
         <div class="seg" id="rangeSeg">
           <button data-range="1">1 h</button><button data-range="6">6 h</button>
           <button data-range="24" class="on">24 h</button><button data-range="168">7 d</button>
@@ -157,7 +157,7 @@
         <div class="stat-strip span-12" id="rangeStats"></div>
 
         <section class="card span-12">
-          <div class="card-head"><h2>Pollution Index · forecast vs actual</h2>
+          <div class="card-head"><h2>Air level · forecast vs actual</h2>
             <div class="legend-row small muted"><span class="lg lg-solid"></span>Actual<span class="lg lg-dash"></span>Forecast, plotted at the time it predicts</div></div>
           <div class="chart-box tall"><canvas id="indexChart"></canvas></div>
         </section>
