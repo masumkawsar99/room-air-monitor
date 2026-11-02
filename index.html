@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Room Air Monitor</title>
+  <meta name="description" content="Live indoor air quality from a low-cost ESP32 + MP-135 + DHT22 monitor with an on-device TinyML forecast.">
+  <meta name="theme-color" content="#142325">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" class="logo">
+      <div>
+        <div class="brand-title" data-i18n="appTitle">Room Air Monitor</div>
+        <div class="brand-sub" data-i18n="appSub">ESP32 with MP-135 and DHT22</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="statusPill" class="pill pill-wait">…</span>
+      <button id="themeBtn" class="icon-btn" aria-label="Theme"></button>
+    </div>
+  </header>
+
+  <div id="demoBanner" class="demo-banner" hidden data-i18n="demoBanner">Demo mode — showing simulated data. Add your Apps Script URL in config.js.</div>
+  <div id="sprayBanner" class="spray-banner" hidden></div>
+
+  <main>
+    <!-- ======================= LIVE ======================= -->
+    <section id="tab-live" class="tab active">
+      <section class="air" aria-live="polite">
+        <div>
+          <p class="label" data-i18n="airNow">Air in the room now</p>
+          <h1 id="airWord" class="air-word">—</h1>
+          <p id="airLead" class="air-lead"></p>
+          <div id="updatedAgo" class="air-meta">—</div>
+        </div>
+        <div class="orb"><svg id="orb" viewBox="0 0 200 200" role="img" aria-label="Pollution Index"></svg></div>
+      </section>
+
+      <div class="next" id="nextStrip"></div>
+
+      <div class="readings">
+        <div class="reading"><div class="k" data-i18n="temperature">Temperature</div><div class="v"><span id="tempVal">—</span><small>°C</small></div><div class="t" id="tempTrend"></div></div>
+        <div class="reading"><div class="k" data-i18n="feelsLike">Feels like</div><div class="v"><span id="feelsVal">—</span><small>°C</small></div><div class="t" id="comfortSmall"></div></div>
+        <div class="reading"><div class="k" data-i18n="humidity">Humidity</div><div class="v"><span id="humVal">—</span><small>%</small></div><div class="t" id="humTrend"></div></div>
+        <div class="reading"><div class="k" data-i18n="dewPoint">Dew point</div><div class="v"><span id="dewVal">—</span><small>°C</small></div><div class="t" id="dewSmall"></div></div>
+      </div>
+
+      <section class="section">
+        <div class="section-head"><h2 data-i18n="advice">What to do</h2></div>
+        <div id="adviceList" class="advice-list"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><h2 data-i18n="todaySummary">Today</h2><span id="roomScore" class="score">—</span></div>
+        <div class="ribbon-wrap" id="ribbonWrap">
+          <div class="ribbon-marks" id="ribbonMarks"></div>
+          <div class="ribbon" id="ribbon" role="img" aria-label="Air level through today"></div>
+          <div class="ribbon-axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+        </div>
+        <div class="day-stats" id="summaryStats"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><h2 data-i18n="eventLog">Sprays and pollution events today</h2></div>
+        <div id="eventLog" class="event-log"></div>
+      </section>
+    </section>
+
+    <!-- ======================= CHARTS ======================= -->
+    <section id="tab-charts" class="tab">
+      <div class="seg" id="rangeSeg">
+        <button data-range="1">1 h</button><button data-range="6">6 h</button>
+        <button data-range="24" class="on">24 h</button><button data-range="168">7 d</button>
+      </div>
+      <div class="card wide">
+        <div class="label" data-i18n="indexChart">Pollution Index · forecast vs actual</div>
+        <div class="chart-box"><canvas id="indexChart"></canvas></div>
+        <div class="legend-row small muted"><span class="lg lg-solid"></span><span data-i18n="actual">Actual</span><span class="lg lg-dash"></span><span data-i18n="forecastShifted">Forecast (plotted at the time it predicts)</span></div>
+      </div>
+      <div class="card wide">
+        <div class="label" data-i18n="thChart">Temperature &amp; humidity</div>
+        <div class="chart-box"><canvas id="thChart"></canvas></div>
+      </div>
+      <div class="card wide">
+        <label class="toggle"><input type="checkbox" id="rawToggle"> <span data-i18n="showRaw">Show raw sensor data (gas_adc, Rs, ratio)</span></label>
+        <div id="rawBox" class="chart-box" hidden><canvas id="rawChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ======================= HEALTH ======================= -->
+    <section id="tab-health" class="tab">
+      <div class="grid">
+        <div class="card">
+          <div class="label" data-i18n="comfort">Thermal comfort</div>
+          <div id="comfortLabel" class="kpi">—</div>
+          <div class="muted"><span data-i18n="feelsLike">Feels like</span> <b id="feels2">—</b> · <span data-i18n="heatIndex">heat index</span></div>
+        </div>
+        <div class="card">
+          <div class="label" data-i18n="dewPoint">Dew point</div>
+          <div id="dewLabel" class="kpi">—</div>
+          <div class="muted" id="dew2">—</div>
+        </div>
+        <div class="card">
+          <div class="label" data-i18n="moldRisk">Mold / dampness risk</div>
+          <div id="moldLabel" class="kpi">—</div>
+          <div class="muted" id="moldDetail">—</div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="label" data-i18n="roomScore">Daily room score</div></div>
+          <div id="scoreBig" class="kpi">—</div>
+          <div class="muted small" data-i18n="scoreNote">Heuristic score (see Info).</div>
+        </div>
+        <div class="card wide">
+          <div class="label" data-i18n="nightReport">Night air report (23:00–07:00)</div>
+          <div id="nightReport" class="night"></div>
+        </div>
+        <div class="card wide">
+          <div class="label" data-i18n="outdoor">Indoor vs outdoor (Dhaka)</div>
+          <div class="io-grid" id="ioGrid"></div>
+          <div id="windowAdvice" class="window-advice"></div>
+          <div class="muted small"><span data-i18n="weatherSrc">Outdoor weather:</span> <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= ANALYSIS ======================= -->
+    <section id="tab-analysis" class="tab">
+      <div class="card wide">
+        <div class="label" data-i18n="heatmap">When does pollution happen? (last 7 days, hourly average)</div>
+        <div id="heatmap" class="heatmap"></div>
+        <div class="legend-row small muted" id="heatLegend"></div>
+      </div>
+      <div class="card wide">
+        <div class="label" data-i18n="compare">Today vs yesterday vs 7-day average</div>
+        <div id="compareTable" class="compare"></div>
+      </div>
+      <div class="card wide">
+        <div class="label" data-i18n="overlay">Pollution Index by time of day</div>
+        <div class="chart-box"><canvas id="overlayChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ======================= INFO ======================= -->
+    <section id="tab-info" class="tab">
+      <div class="card wide prose" id="infoContent"></div>
+      <div class="card wide">
+        <div class="label" data-i18n="notifications">Notifications</div>
+        <p class="muted small" data-i18n="notifNote">Get a browser notification when a spray/spike starts and when the air is clear again (while the app is open).</p>
+        <button id="notifBtn" class="btn" data-i18n="enableNotif">Enable notifications</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="live" class="on"><span class="ti">●</span><span data-i18n="tabLive">Live</span></button>
+    <button data-tab="charts"><span class="ti">∿</span><span data-i18n="tabCharts">Charts</span></button>
+    <button data-tab="health"><span class="ti">♡</span><span data-i18n="tabHealth">Health</span></button>
+    <button data-tab="analysis"><span class="ti">▦</span><span data-i18n="tabAnalysis">Analysis</span></button>
+    <button data-tab="info"><span class="ti">i</span><span data-i18n="tabInfo">Info</span></button>
+  </nav>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
