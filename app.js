@@ -311,6 +311,7 @@
     const pill = $('statusPill'), L = latest();
     if (!S.loaded) { pill.className = 'pill pill-wait'; pill.textContent = T('loading'); return; }
     if (!L) { pill.className = 'pill pill-off'; pill.textContent = S.error ? T('connError') : T('noData'); return; }
+    if (DEMO) { pill.className = 'pill pill-wait'; pill.textContent = 'Demo data'; return; }
     const age = Date.now() - L.t;
     if (age > OFFLINE_MS) { pill.className = 'pill pill-off'; pill.textContent = `${T('offline')} · ${T('lastData')} ${hhmm(L.t)}`; }
     else { pill.className = 'pill pill-on'; pill.textContent = `${T('online')}`; }
