@@ -4,7 +4,7 @@
 window.AQ_CONFIG = {
   // Paste your Google Apps Script web-app URL here (it ends with /exec).
   // Leave it empty ("") to run the app with realistic DEMO data.
-  API_URL: "",
+  API_URL: "https://script.google.com/macros/s/AKfycbyCJFEZcxbLQ4Xip4qXVSMfjHsGKODYvfamY-nGQBM-qDC4VAv1dvoMyDaQsxg6uzMxZw/exec",
 
   REFRESH_SECONDS: 30,          // how often new readings are fetched
   OFFLINE_AFTER_SECONDS: 120,   // device is shown as offline after this long without data
