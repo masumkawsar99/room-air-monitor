@@ -73,7 +73,8 @@
       outUnavailable: 'Outdoor weather unavailable right now.',
       today: 'Today', yesterday: 'Yesterday', week: '7-day avg', approx: '≈ estimated from 5-min data',
       noDataCell: 'no data', range: { 1: '1 h', 6: '6 h', 24: '24 h', 168: '7 d' },
-      offlineToast: 'Showing saved data — cannot reach the server.'
+      offlineToast: 'Showing saved data — cannot reach the server.',
+      offBanner: 'The monitor is switched off at the moment. Showing the last recorded data, up to {t}.'
     }
   };
   const lang = 'en';
@@ -89,6 +90,8 @@
   const dayKey = t => dk(t).toISOString().slice(0, 10);
   const midnight = t => { const d = dk(t); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - TZ; };
   const hhmm = t => { const d = dk(t); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); };
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dayTime = t => { const d = dk(t); return d.getUTCDate() + ' ' + MON[d.getUTCMonth()] + ' ' + hhmm(t); };
   const dayLabel = t => new Date(t).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Dhaka' });
   const levelOfIndex = x => (x === null || x === undefined || !Number.isFinite(x) ? null : x > TH[2] ? 3 : x > TH[1] ? 2 : x > TH[0] ? 1 : 0);
   const mean = a => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
@@ -122,6 +125,9 @@
   const dewIdx = d => (d < 16 ? 0 : d < 21 ? 1 : d < 24 ? 2 : 3);
 
   // ------------------------------------------------------------ state
+  // When the device is off, render everything as of its last reading.
+  const isOff = () => { const r = S.rows[S.rows.length - 1]; return !!r && !DEMO && Date.now() - r.t > OFFLINE_MS; };
+  const NOW = () => (isOff() ? S.rows[S.rows.length - 1].t : Date.now());
   const S = { rows: [], rows7: [], outdoor: null, outdoorErr: false, range: 24, charts: {}, tab: 'overview', loaded: false, error: false };
 
   // ------------------------------------------------------------ DEMO data
@@ -209,7 +215,7 @@
       const fresh = j.rows.map(normRow).filter(r => r.t > last).sort((a, b) => a.t - b.t);
       if (fresh.length) {
         S.rows.push(...fresh);
-        const cut = Date.now() - 48 * HOUR; while (S.rows.length && S.rows[0].t < cut) S.rows.shift();
+        const cut = NOW() - 48 * HOUR; while (S.rows.length && S.rows[0].t < cut) S.rows.shift();
         saveCache();
       }
       S.error = false;
@@ -322,12 +328,15 @@
     if (!L) { pill.className = 'pill pill-off'; pill.textContent = S.error ? T('connError') : T('noData'); return; }
     if (DEMO) { pill.className = 'pill pill-wait'; pill.textContent = 'Demo data'; return; }
     const age = Date.now() - L.t;
-    if (age > OFFLINE_MS) { pill.className = 'pill pill-off'; pill.textContent = `${T('offline')} · ${T('lastData')} ${hhmm(L.t)}`; }
+    if (age > OFFLINE_MS) { pill.className = 'pill pill-off'; pill.textContent = `${T('offline')} · ${T('lastData')} ${age > 20 * HOUR ? dayTime(L.t) : hhmm(L.t)}`; }
     else { pill.className = 'pill pill-on'; pill.textContent = `${T('online')}`; }
   }
   function renderAgo() {
     const L = latest(); if (!L) { $('updatedAgo').textContent = T('noData'); return; }
     const s = Math.max(0, Math.round((Date.now() - L.t) / 1000));
+    const ob = $('offlineBanner'); if (ob) { const off = !DEMO && s * 1000 > OFFLINE_MS; ob.hidden = !off; if (off) ob.textContent = fill(T('offBanner'), { t: dayTime(L.t) }); }
+    const ae = $('airEyebrow'); if (ae) ae.textContent = (!DEMO && s * 1000 > OFFLINE_MS) ? 'Air in the room at the last reading' : 'Air in the room now';
+    if (s >= 3 * 3600) { $('updatedAgo').textContent = `${T('lastData')} ${dayTime(L.t)}`; renderStatus(); return; }
     $('updatedAgo').textContent = s < 5 ? `${T('updated')} ${T('justNow')}` : s < 120 ? `${T('updated')} ${s} ${T('sec')} ${T('ago')}` : `${T('updated')} ${Math.round(s / 60)} ${T('min')} ${T('ago')} · ${hhmm(L.t)}`;
     renderStatus();
   }
@@ -369,7 +378,7 @@
     return out.map(a => (a.length ? mean(a) : null));
   }
   function renderSparks() {
-    const from = Date.now() - 6 * HOUR, r = S.rows.filter(x => x.t >= from);
+    const from = NOW() - 6 * HOUR, r = S.rows.filter(x => x.t >= from);
     const tc = css('--slate');
     drawSpark('sparkTemp', bucket(r, x => x.temp, 60), '#e0584f');
     drawSpark('sparkHum', bucket(r, x => x.hum, 60), '#3b82f6');
@@ -378,7 +387,7 @@
     void tc;
     // forecast card: last 2 h of index + the +10 min forecast point
     const el = $('fcSpark'); if (!el) return;
-    const now = Date.now(), f0 = now - 2 * HOUR, f1 = now + 10 * MIN, W = 300, H = 90, pad = 8;
+    const now = NOW(), f0 = now - 2 * HOUR, f1 = now + 10 * MIN, W = 300, H = 90, pad = 8;
     const rr = S.rows.filter(x => x.t >= f0 && x.index !== null), L = latest();
     if (rr.length < 2) { el.innerHTML = ''; return; }
     const vals = rr.map(x => x.index).concat(L && L.fi !== null ? [L.fi] : []);
@@ -432,10 +441,10 @@
   }
 
   function activeEvent() {
-    const ev = detectEvents(S.rows.filter(r => r.t > Date.now() - 6 * HOUR));
+    const ev = detectEvents(S.rows.filter(r => r.t > NOW() - 6 * HOUR));
     const e = ev[ev.length - 1];
     if (!e || e.normalT) return null;
-    if (Date.now() - e.lastSpike > 3 * HOUR) return null;
+    if (NOW() - e.lastSpike > 3 * HOUR) return null;
     return e;
   }
   function renderBanner() {
@@ -444,7 +453,7 @@
     const o = { t: hhmm(e.start), p: Math.round(e.peak) };
     if (L.lv === 3) { el.className = 'spray-banner'; el.textContent = '🔴 ' + fill(T('sprayNow'), o); }
     else {
-      const since = (Date.now() - e.peakT) / MIN;
+      const since = (NOW() - e.peakT) / MIN;
       const m = Math.max(1, Math.round(MEDIAN_REC - since));
       el.className = 'spray-banner recovering';
       el.textContent = '🟠 ' + (L.fc === 0 || m <= 10 ? fill(T('recoveringSoon'), o) : fill(T('recovering'), Object.assign(o, { m })));
@@ -464,7 +473,7 @@
     const elevMin = since ? (L.t - since) / MIN : 0;
     if (L.lv === 3) { items.push(['🔴', T('advSpike')]); needVent = true; }
     else if (L.lv >= 2 && elevMin > 15) { items.push(['🪟', fill(T('advElevated'), { m: Math.round(elevMin) })]); needVent = true; }
-    else if (e && L.lv >= 1 && (Date.now() - e.peakT) / MIN > 20) { items.push(['🪟', fill(T('advSlow'), { m: Math.round((Date.now() - e.peakT) / MIN) })]); needVent = true; }
+    else if (e && L.lv >= 1 && (NOW() - e.peakT) / MIN > 20) { items.push(['🪟', fill(T('advSlow'), { m: Math.round((NOW() - e.peakT) / MIN) })]); needVent = true; }
     else if (L.lv === 0) items.push(['✅', T('advNormal')]);
     if (needVent && S.outdoor && R && R.temp !== null) {
       const din = dewPoint(R.temp, R.hum);
@@ -477,7 +486,7 @@
   }
 
   function renderSummary() {
-    const now = Date.now(), d0 = midnight(now);
+    const now = NOW(), d0 = midnight(now);
     const st = dayStats(S.rows, d0, now + MIN);
     const sc = roomScore(st);
     $('roomScore').textContent = sc === null ? '' : fill(T('roomScoreHead'), { s: sc, l: scoreLabel(sc) });
@@ -547,7 +556,7 @@
   }
   function rangeRows() {
     if (S.range > 48) return S.rows7.length ? S.rows7 : S.rows;
-    const from = Date.now() - S.range * HOUR; return S.rows.filter(r => r.t >= from);
+    const from = NOW() - S.range * HOUR; return S.rows.filter(r => r.t >= from);
   }
   function renderRangeStats(rows) {
     const el = $('rangeStats'); if (!el) return;
@@ -577,7 +586,7 @@
     const ds2 = [{ label: T('temperature') + ' (°C)', data: temp, borderColor: '#ef4444', yAxisID: 'y' }, { label: T('humidity') + ' (%)', data: hum, borderColor: '#3b82f6', yAxisID: 'y1' }];
     const gas = rows.filter(r => r.gas !== null).map(r => ({ x: r.t, y: r.gas })), rs = rows.filter(r => r.rs !== null).map(r => ({ x: r.t, y: r.rs })), ra = rows.filter(r => r.ratio !== null).map(r => ({ x: r.t, y: r.ratio }));
     const ds3 = [{ label: 'gas_adc', data: gas, borderColor: '#a855f7', yAxisID: 'y' }, { label: 'Rs (kΩ)', data: rs, borderColor: '#14b8a6', yAxisID: 'y1' }, { label: 'Rs/R0', data: ra, borderColor: '#f59e0b', yAxisID: 'y2' }];
-    const xmin = S.range > 48 ? (rows[0] ? rows[0].t : undefined) : Date.now() - S.range * HOUR, xmax = Date.now() + 10 * MIN;
+    const xmin = S.range > 48 ? (rows[0] ? rows[0].t : undefined) : NOW() - S.range * HOUR, xmax = NOW() + 10 * MIN;
     const grid = css('--rule'), tick = css('--slate');
     const mk = (key, canvas, ds, scales, extra) => {
       if (rebuild && S.charts[key]) { S.charts[key].destroy(); S.charts[key] = null; }
@@ -596,12 +605,12 @@
 
   // ------------------------------------------------------------ health
   function moldInfo() {
-    const r = S.rows.filter(x => x.t > Date.now() - DAY && x.hum !== null);
+    const r = S.rows.filter(x => x.t > NOW() - DAY && x.hum !== null);
     const a = r.filter(x => x.hum >= 70).length * 30 / 3600, b = r.filter(x => x.hum >= 80).length * 30 / 3600;
     return { a, b, level: b >= 6 ? 2 : a >= 6 ? 1 : 0, n: r.length };
   }
   function nightWindow() {
-    const now = Date.now(), m = midnight(now), h = hourOf(now);
+    const now = NOW(), m = midnight(now), h = hourOf(now);
     return h < 7 ? [m - HOUR, now] : [m - HOUR, m + 7 * HOUR];
   }
   function renderHealth() {
@@ -649,7 +658,7 @@
   function renderAnalysis() {
     const rows = S.rows7.length ? S.rows7 : S.rows;
     // heatmap: 7 days x 24 hours
-    const today0 = midnight(Date.now()); const days = [];
+    const today0 = midnight(NOW()); const days = [];
     for (let i = 6; i >= 0; i--) days.push(today0 - i * DAY);
     const cell = {}; rows.forEach(r => { if (r.index === null) return; const k = dayKey(r.t) + '|' + hourOf(r.t); (cell[k] = cell[k] || []).push(r.index); });
     let html = '<div></div>' + Array.from({ length: 24 }, (_, h) => `<div class="hh">${h % 3 === 0 ? h : ''}</div>`).join('');
@@ -666,7 +675,7 @@
     $('heatLegend').innerHTML = T('lv').map((n, i) => `<span><span class="sw" style="background:${LV_COL[i]}"></span>${n}</span>`).join('') +
       `<span><span class="sw" style="outline:1px dashed ${css('--rule')}"></span>${T('noDataCell')}</span>`;
     // compare table
-    const now = Date.now();
+    const now = NOW();
     const tS = dayStats(S.rows, today0, now + MIN), yS = dayStats(S.rows, today0 - DAY, today0);
     const wk = [];
     for (let i = 0; i < 7; i++) { const s = dayStats(rows, today0 - i * DAY, today0 - (i - 1) * DAY); if (s && s.n > 20) wk.push(s); }

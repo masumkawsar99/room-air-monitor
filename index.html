@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -57,6 +57,7 @@
   </header>
 
   <div id="demoBanner" class="demo-banner" hidden data-i18n="demoBanner">Demo mode — showing simulated data.</div>
+  <div id="offlineBanner" class="demo-banner" hidden role="status"></div>
   <div id="sprayBanner" class="spray-banner" hidden></div>
 
   <main>
@@ -65,7 +66,7 @@
       <div class="dash">
         <section class="air span-8" aria-live="polite">
           <div class="air-text">
-            <p class="eyebrow">Air in the room now</p>
+            <p class="eyebrow" id="airEyebrow">Air in the room now</p>
             <h1 id="airWord" class="air-word">—</h1>
             <p id="airLead" class="air-lead"></p>
             <div id="updatedAgo" class="air-meta">—</div>
@@ -211,7 +212,7 @@
   <div id="toast" class="toast" hidden></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="config.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="config.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

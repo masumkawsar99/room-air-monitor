@@ -111,8 +111,12 @@ function handleRead(p) {
     const first = lastRow - n + 1;
     const values = sheet.getRange(first, 1, n, HEADERS.length).getValues();
 
-    const nowMs = Date.now();
-    const fromMs = useSince ? since : nowMs - hours * 3600 * 1000;
+    // Count the window back from the newest reading, not from now, so the
+    // dashboard still shows the last recorded period while the device is off.
+    const lastCell = values[values.length - 1][0];
+    const lastMs = lastCell instanceof Date ? lastCell.getTime() : new Date(lastCell).getTime();
+    const anchorMs = Number.isFinite(lastMs) ? Math.min(Date.now(), lastMs) : Date.now();
+    const fromMs = useSince ? since : anchorMs - hours * 3600 * 1000;
     const rows = [];
     for (let i = 0; i < values.length; i++) {
       const r = values[i];
